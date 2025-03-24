@@ -1,0 +1,123 @@
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectItem } from "@/components/ui/select";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+
+export default function IMCPercentilApp() {
+  const [peso, setPeso] = useState(0);
+  const [altura, setAltura] = useState(0);
+  const [edad, setEdad] = useState(0);
+  const [sexo, setSexo] = useState("masculino");
+  const [imc, setImc] = useState(null);
+  const [percentil, setPercentil] = useState(null);
+
+  // Datos de referencia de percentiles para IMC (valores de ejemplo basados en CDC)
+  const dataReferenciaMasculino = [
+    { age: 5, p5: 13.0, p50: 15.0, p95: 17.0 },
+    { age: 10, p5: 14.0, p50: 17.0, p95: 20.0 },
+    { age: 15, p5: 16.0, p50: 20.0, p95: 24.0 }
+  ];
+
+  const dataReferenciaFemenino = [
+    { age: 5, p5: 13.2, p50: 15.2, p95: 17.2 },
+    { age: 10, p5: 14.2, p50: 17.5, p95: 21.0 },
+    { age: 15, p5: 15.8, p50: 20.0, p95: 24.0 }
+  ];
+
+  // Función de interpolación lineal entre dos puntos de referencia según la edad
+  const interpolarDatos = (edad, dataArray) => {
+    if (edad <= dataArray[0].age) return dataArray[0];
+    if (edad >= dataArray[dataArray.length - 1].age) return dataArray[dataArray.length - 1];
+
+    let lower, upper;
+    for (let i = 0; i < dataArray.length - 1; i++) {
+      if (edad >= dataArray[i].age && edad <= dataArray[i + 1].age) {
+        lower = dataArray[i];
+        upper = dataArray[i + 1];
+        break;
+      }
+    }
+    const ratio = (edad - lower.age) / (upper.age - lower.age);
+    return {
+      age: edad,
+      p5: lower.p5 + ratio * (upper.p5 - lower.p5),
+      p50: lower.p50 + ratio * (upper.p50 - lower.p50),
+      p95: lower.p95 + ratio * (upper.p95 - lower.p95),
+    };
+  };
+
+  // Función para calcular el percentil basándose en datos reales
+  const calcularPercentilReal = (imcCalculado, edad, sexo) => {
+    const dataRef = sexo === "masculino" ? dataReferenciaMasculino : dataReferenciaFemenino;
+    const datosInterpolados = interpolarDatos(Number(edad), dataRef);
+    
+    // Si el IMC está por debajo del percentil 5 o por encima del 95 se retorna un valor extremo
+    if (imcCalculado <= datosInterpolados.p5) return "<5";
+    if (imcCalculado >= datosInterpolados.p95) return ">95";
+
+    // Interpolación lineal en el rango entre p5 y p50 o p50 y p95
+    let percentilCalculado = 0;
+    if (imcCalculado < datosInterpolados.p50) {
+      percentilCalculado = 5 + ((imcCalculado - datosInterpolados.p5) * (45 / (datosInterpolados.p50 - datosInterpolados.p5)));
+    } else {
+      percentilCalculado = 50 + ((imcCalculado - datosInterpolados.p50) * (45 / (datosInterpolados.p95 - datosInterpolados.p50)));
+    }
+    return percentilCalculado.toFixed(1);
+  };
+
+  const calcularIMC = () => {
+    if (peso > 0 && altura > 0 && edad > 0) {
+      const imcCalculado = peso / (altura * altura);
+      setImc(imcCalculado.toFixed(2));
+      const perc = calcularPercentilReal(imcCalculado, edad, sexo);
+      setPercentil(perc);
+    }
+  };
+
+  return (
+    <div className="flex justify-center items-center min-h-screen bg-gray-100">
+      <Card className="p-6 w-full max-w-md shadow-lg rounded-2xl">
+        <CardContent>
+          <h2 className="text-xl font-bold mb-4">Calculadora de IMC y Percentil</h2>
+          <div className="mb-4">
+            <Label>Peso (kg)</Label>
+            <Input type="number" value={peso} onChange={(e) => setPeso(e.target.value)} />
+          </div>
+          <div className="mb-4">
+            <Label>Altura (m)</Label>
+            <Input type="number" value={altura} onChange={(e) => setAltura(e.target.value)} />
+          </div>
+          <div className="mb-4">
+            <Label>Edad (años)</Label>
+            <Input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} />
+          </div>
+          <div className="mb-4">
+            <Label>Sexo</Label>
+            <Select value={sexo} onChange={(e) => setSexo(e.target.value)}>
+              <SelectItem value="masculino">Masculino</SelectItem>
+              <SelectItem value="femenino">Femenino</SelectItem>
+            </Select>
+          </div>
+          <Button className="w-full" onClick={calcularIMC}>Calcular</Button>
+          {imc && (
+            <div className="mt-4">
+              <p><strong>IMC:</strong> {imc}</p>
+              <p><strong>Percentil:</strong> {percentil}</p>
+            </div>
+          )}
+          <ResponsiveContainer width="100%" height={200} className="mt-4">
+            <LineChart data={[{ edad, imc }]}>
+              <XAxis dataKey="edad" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="imc" stroke="#8884d8" />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
